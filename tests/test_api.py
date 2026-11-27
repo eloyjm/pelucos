@@ -43,11 +43,11 @@ def test_rechaza_ids_y_cuerpos_malos(cliente):
     assert cliente.put("/api/relojes/x", content=b"no", headers={"Content-Type": "application/json"}).status_code == 400
 
 
-def test_fotos(cliente):
-    r = cliente.post("/api/fotos", files={"foto": ("f.jpg", JPEG, "image/jpeg")}).json()
-    assert len(r["id"]) == 32 and r["url"] == "/_blob/" + r["id"]
-    f = cliente.get(r["url"])
+def test_fotos(cliente, tmp_path):
+    (tmp_path / "fotos").mkdir()
+    (tmp_path / "fotos" / ("a" * 32)).write_bytes(JPEG)
+    f = cliente.get("/_blob/" + "a" * 32)
     assert f.status_code == 200 and f.content == JPEG and f.headers["content-type"] == "image/jpeg"
-    assert cliente.post("/api/fotos", files={"foto": ("x.txt", b"hola", "text/plain")}).status_code == 415
+    assert cliente.post("/api/fotos").status_code in (404, 405)  # no se suben fotos desde la web
     assert cliente.get("/_blob/" + "0" * 32).status_code == 404
     assert cliente.get("/_blob/..%2Fpelucos.db").status_code == 404

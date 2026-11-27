@@ -205,19 +205,10 @@ legend { font-size: 11.5px; text-transform: uppercase; letter-spacing: .12em; co
 label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
 input[type=text], input[type=number], select.f, textarea { border: 1px solid var(--line); background: var(--raised); border-radius: 8px; padding: 8px 10px; width: 100%; box-sizing: border-box; color: var(--fg); }
 textarea { min-height: 80px; resize: vertical; }
-.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
-.thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--accent-soft); }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.thumb button { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgb(0 0 0 / .6); color: #fff; font-size: 14px; line-height: 1; }
-.thumb.add { display: grid; place-items: center; border-style: dashed; background: transparent; color: var(--muted); font-size: 13px; text-align: center; padding: 6px; cursor: pointer; }
-.thumb.add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.analizando { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--accent); }
-.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--bad); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg);
   padding: 8px 16px; border-radius: 999px; font-size: 14px; z-index: 30; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .spin { animation: none; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="wrap">
@@ -228,7 +219,6 @@ textarea { min-height: 80px; resize: vertical; }
     </div>
     <div class="actions">
       <button class="btn" id="toggleValor" aria-pressed="false">Mostrar valores</button>
-      <button class="btn primary" id="nuevoFotos">Añadir desde fotos</button>
     </div>
   </header>
 
@@ -265,9 +255,7 @@ textarea { min-height: 80px; resize: vertical; }
     <p class="note" id="estadoCarga">Cargando la colección…</p>
     <div class="grid" id="grid"></div>
     <div class="empty" id="vacio" hidden>
-      <h2>Aún no hay ningún reloj apuntado</h2>
-      <p>Haz 3 o 4 fotos de cada uno: la esfera de frente, la trasera, el movimiento y cualquier número grabado, y rellena su ficha.</p>
-      <button class="btn primary" id="nuevoFotos2">Añadir el primero desde fotos</button>
+      <h2>Aún no hay ningún reloj en la colección</h2>
     </div>
   </section>
 
@@ -281,15 +269,6 @@ textarea { min-height: 80px; resize: vertical; }
   <div class="pbody" id="vista"></div>
 
   <form class="pbody" id="form" autocomplete="off" hidden>
-    <fieldset>
-      <legend>Fotos</legend>
-      <div class="thumbs" id="thumbs"></div>
-      <div class="actions">
-        <button type="button" class="btn small" id="analizar">Identificar y valorar con Claude</button>
-        <span class="note" id="fotoNota"></span>
-      </div>
-      <div id="iaEstado"></div>
-    </fieldset>
     <fieldset>
       <legend>El reloj</legend>
       <label class="f">Nombre con el que lo reconoces<input type="text" id="nombre"></label>
@@ -336,7 +315,7 @@ textarea { min-height: 80px; resize: vertical; }
     </fieldset>
     <fieldset>
       <legend>Notas</legend>
-      <label class="f">Historia, de quién era, lo que dijo el relojero… (Claude también las lee al analizar)<textarea id="notas"></textarea></label>
+      <label class="f">Historia, de quién era, lo que dijo el relojero…<textarea id="notas"></textarea></label>
     </fieldset>
   </form>
 
@@ -352,8 +331,6 @@ textarea { min-height: 80px; resize: vertical; }
 <div class="toast" id="toast" hidden></div>
 
 <script>
-const TAREAS_BASE = ["Revisión del movimiento (desmontar, limpiar, lubricar)", "Limpieza de caja y brazalete", "Cristal", "Corona y juntas", "Correa o brazalete", "Regular la marcha y poner en hora"];
-const MAX_FOTOS = 8;
 const L = {
   estado: { parado: ["Parado", "p-bad"], mal: ["Anda mal", "p-warn"], anda: ["Anda bien", "p-ok"], sin_revisar: ["Sin probar", "p-mute"] },
   destino: { coleccion: ["Colección", "p-brass"], uso: ["Para usar", "p-acc"], vender: ["Vender", "p-mute"], decidir: ["Por decidir", "p-mute"] },
@@ -388,10 +365,10 @@ function relojSvg() {
   return s;
 }
 
-let db = null, assets = null, sample = null, maxImgs = 0, relojes = [], cargado = false;
+let db = null, relojes = [], cargado = false;
 let verValor = false, filtroFase = "todos", filtroDestino = "todos", orden = "valor";
 let actual = null;      // id del reloj abierto
-let borrador = null, fotos = [], guardando = false, analizando = null, modo = "vista", fotoSel = 0;
+let borrador = null, guardando = false, modo = "vista", fotoSel = 0;
 
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2400); }
 
@@ -505,7 +482,7 @@ function mostrarModo() {
   $("vista").hidden = modo !== "vista"; $("pfootVista").hidden = modo !== "vista";
   $("form").hidden = modo !== "form"; $("pfootForm").hidden = modo !== "form";
 }
-function cerrar() { if (analizando) analizando.abort(); $("panel").hidden = true; $("scrim").hidden = true; actual = null; borrador = null; fotos = []; }
+function cerrar() { $("panel").hidden = true; $("scrim").hidden = true; actual = null; borrador = null; }
 
 function galeria(r) {
   const items = (r.fotos || []).filter(blobUrl).map((id) => ({ url: blobUrl(id), tag: null }));
@@ -602,130 +579,16 @@ const CAMPOS = ["nombre", "marca", "modelo", "referencia", "calibre", "tipo", "m
 const NUMERICOS = new Set(["valor", "presupuesto"]);
 
 function editar(r) {
-  if (analizando) analizando.abort();
-  borrador = r ? structuredClone(r) : { tipo: "pulsera", movimiento: "desconocido", estado: "sin_revisar", destino: "decidir", fase: "pendiente", tareas: TAREAS_BASE.map((t) => ({ t, hecho: false })) };
+  borrador = structuredClone(r);
   delete borrador.id;
-  actual = r ? r.id : null;
-  fotos = (Array.isArray(borrador.fotos) ? borrador.fotos : []).filter(blobUrl).map((id) => ({ id, url: blobUrl(id) }));
-  $("ptitle").textContent = r ? "Editar ficha" : "Nuevo reloj";
+  actual = r.id;
+  $("ptitle").textContent = "Editar ficha";
   for (const c of CAMPOS) $(c).value = borrador[c] ?? "";
-  $("errGuardar").textContent = ""; $("iaEstado").replaceChildren();
-  $("borrarZona").hidden = !r; resetBorrar();
-  pintarFotos(); pintarTareasEdit();
+  $("errGuardar").textContent = "";
+  resetBorrar(); pintarTareasEdit();
   modo = "form"; mostrarModo();
-  $("panel").hidden = false; $("scrim").hidden = false;
 }
-function nuevoDesdeFotos() { if (!db) return; editar(null); $("fotoInput")?.click(); }
-function cancelarEdicion() { if (analizando) analizando.abort(); if (actual) { modo = "vista"; borrador = null; mostrarModo(); pintarVista(); } else cerrar(); }
-
-function pintarFotos() {
-  const box = $("thumbs"); box.replaceChildren();
-  fotos.forEach((f, i) => box.append(h("div", { class: "thumb" }, h("img", { src: f.url, alt: `Foto ${i + 1}` }),
-    h("button", { type: "button", "aria-label": "Quitar foto", onclick: () => { fotos.splice(i, 1); pintarFotos(); } }, "×"))));
-  if (fotos.length < MAX_FOTOS) {
-    const inp = h("input", { type: "file", id: "fotoInput", accept: "image/*", multiple: "", "aria-label": "Añadir fotos", disabled: assets ? null : "" });
-    inp.addEventListener("change", (e) => añadirFotos(e.target.files));
-    box.append(h("label", { class: "thumb add" }, inp, fotos.length ? "+ Añadir" : "+ Añadir fotos"));
-  }
-  $("fotoNota").textContent = !assets ? "Para subir fotos hace falta permiso de edición."
-    : !fotos.length ? "Esfera, trasera, movimiento y números grabados: cuantas más, mejor."
-    : fotos.some((f) => f.blob) ? "Las fotos nuevas se suben al guardar." : "";
-  $("analizar").disabled = !sample || !maxImgs || !fotos.length || !!analizando;
-  $("analizar").hidden = !sample || !maxImgs;
-}
-async function reducir(file) {
-  try {
-    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
-    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height); bmp.close?.();
-    return (await new Promise((res) => c.toBlob(res, "image/jpeg", 0.86))) || file;
-  } catch { return file; }
-}
-async function añadirFotos(lista) {
-  const files = [...(lista || [])].filter((f) => f.type.startsWith("image/")).slice(0, MAX_FOTOS - fotos.length);
-  if (!files.length) return;
-  $("fotoNota").textContent = "Preparando fotos…";
-  for (const f of files) { const b = await reducir(f); fotos.push({ blob: b, url: URL.createObjectURL(b) }); }
-  pintarFotos();
-  if (sample && maxImgs && !borrador.ia) analizar();
-}
-
-function prompt() {
-  const datos = {};
-  for (const c of ["nombre", "marca", "modelo", "referencia", "calibre", "anio", "material", "notas"]) { const v = $(c).value.trim(); if (v) datos[c] = v; }
-  return `Eres un relojero restaurador y tasador con mucha experiencia en relojes antiguos y vintage (pulsera, bolsillo y sobremesa), y conoces el mercado de segunda mano en España y Europa.
-
-Te paso ${Math.min(fotos.length, maxImgs)} foto(s) de UN SOLO reloj de una herencia (esfera, caja, trasera, movimiento o marcas grabadas).
-Lo que el dueño ya sabe o ha escrito (puede estar vacío o ser incorrecto): ${JSON.stringify(datos)}
-
-Identifícalo, clasifícalo, valóralo y di qué necesita para ponerlo a punto. Sé honesto: si algo no se ve, pon null; no inventes referencias ni calibres. Fíjate en esferas repintadas, piezas cambiadas, chapado frente a oro macizo y posibles falsificaciones.
-
-Responde SOLO con un objeto JSON con exactamente estas claves:
-{"marca": string|null, "modelo": string|null, "referencia": string|null, "calibre": string|null, "anio": string|null,
- "tipo": "pulsera"|"bolsillo"|"sobremesa", "movimiento": "manual"|"automatico"|"cuarzo"|"desconocido", "material": string|null,
- "categoria": "vestir"|"deportivo"|"cronografo"|"buceo"|"militar"|"bolsillo"|"joya"|"sobremesa"|"otro", "interes": "alto"|"medio"|"bajo",
- "estado_visible": string, "estado": "parado"|"mal"|"anda"|"sin_revisar", "destino_sugerido": "coleccion"|"uso"|"vender"|"decidir", "razon_destino": string,
- "tareas": [string], "coste_min": number, "coste_max": number, "valor_min": number, "valor_max": number,
- "valor_revisado_min": number, "valor_revisado_max": number, "razon_valor": string, "confianza": "alta"|"media"|"baja",
- "pistas": [string], "alertas": [string], "fotos_que_faltan": [string], "resumen": string}
-Importes en euros (segunda mano en España; coste en relojero independiente). Escribe en español. Los números, sin símbolos.`;
-}
-async function blobDe(f) { if (f.blob) return f.blob; try { const r = await fetch(f.url); return r.ok ? await r.blob() : null; } catch { return null; } }
-async function analizar() {
-  if (!sample || !fotos.length || analizando) return;
-  const ctrl = new AbortController(); analizando = ctrl;
-  const box = $("iaEstado");
-  box.replaceChildren(h("div", { class: "analizando" }, h("span", { class: "spin" }), "Claude está mirando las fotos… puede tardar un minuto."));
-  pintarFotos();
-  try {
-    const blobs = (await Promise.all(fotos.slice(0, maxImgs).map(blobDe))).filter(Boolean);
-    if (!blobs.length) throw { code: "sin_fotos" };
-    const r = await sample.json(prompt(), { images: blobs, modelTier: "complex", signal: ctrl.signal, cache: false });
-    if (ctrl.signal.aborted || !borrador) return;
-    if (!r || typeof r !== "object" || Array.isArray(r)) throw { code: "invalid_json" };
-    aplicarIA(limpiarIA(r));
-    box.replaceChildren(h("p", { class: "note", text: "Ficha rellenada por Claude. Revísala y guarda; el análisis completo se ve en la ficha." }));
-  } catch (e) {
-    if (e?.code === "cancelled" || ctrl.signal.aborted) return;
-    const msg = { not_granted: "No has dado permiso a la página para preguntar a Claude.", rate_limited: "Has llegado al límite de uso por ahora. Prueba dentro de un rato.",
-      image_rejected: "Alguna foto no se ha podido usar. Prueba a quitarla.", images_unavailable: "Desde aquí no se pueden mandar fotos a Claude. Prueba desde el navegador.",
-      invalid_json: "La respuesta llegó incompleta. Vuelve a pulsar «Identificar».", refused: "Claude no ha querido analizar estas fotos.",
-      sin_fotos: "No se han podido leer las fotos ya subidas." }[e?.code] || "No se pudo analizar ahora (" + (e?.code || "error") + ").";
-    box.replaceChildren(h("p", { class: "note err", text: msg }));
-  } finally { if (analizando === ctrl) analizando = null; if (borrador) pintarFotos(); }
-}
-function limpiarIA(r) {
-  const s = (v) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 600) : null);
-  const arr = (v) => (Array.isArray(v) ? v.map(s).filter(Boolean).slice(0, 15) : []);
-  const en = (v, ok) => (ok.includes(v) ? v : null);
-  const o = {
-    marca: s(r.marca), modelo: s(r.modelo), referencia: s(r.referencia), calibre: s(r.calibre), anio: s(r.anio), material: s(r.material),
-    tipo: en(r.tipo, ["pulsera", "bolsillo", "sobremesa"]), movimiento: en(r.movimiento, ["manual", "automatico", "cuarzo", "desconocido"]),
-    categoria: en(r.categoria, Object.keys(L.categoria)), interes: en(r.interes, ["alto", "medio", "bajo"]),
-    estado: en(r.estado, ["parado", "mal", "anda", "sin_revisar"]), destino_sugerido: en(r.destino_sugerido, ["coleccion", "uso", "vender", "decidir"]),
-    confianza: en(r.confianza, ["alta", "media", "baja"]) || "baja",
-    estado_visible: s(r.estado_visible), razon_destino: s(r.razon_destino), razon_valor: s(r.razon_valor), resumen: s(r.resumen),
-    tareas: arr(r.tareas), pistas: arr(r.pistas), alertas: arr(r.alertas), fotos_que_faltan: arr(r.fotos_que_faltan), fecha: new Date().toISOString(),
-  };
-  for (const k of ["coste_min", "coste_max", "valor_min", "valor_max", "valor_revisado_min", "valor_revisado_max"]) o[k] = num(r[k]);
-  return o;
-}
-function aplicarIA(ia) {
-  borrador.ia = ia;
-  const poner = (c, v, siempre = false) => { if (v != null && v !== "" && (siempre || !$(c).value.trim())) $(c).value = v; };
-  for (const c of ["marca", "modelo", "referencia", "calibre", "anio", "material"]) poner(c, ia[c]);
-  for (const c of ["tipo", "movimiento", "categoria", "interes"]) poner(c, ia[c], true);
-  if (ia.estado && ia.estado !== "sin_revisar" && $("estado").value === "sin_revisar") $("estado").value = ia.estado;
-  if (ia.destino_sugerido && $("destino").value === "decidir") $("destino").value = ia.destino_sugerido;
-  if (!$("nombre").value.trim()) poner("nombre", [ia.marca, ia.modelo].filter(Boolean).join(" ") || null);
-  if (ia.tareas.length) {
-    const intacta = borrador.tareas.length === TAREAS_BASE.length && borrador.tareas.every((t, i) => !t.hecho && t.t === TAREAS_BASE[i]);
-    if (intacta) borrador.tareas = ia.tareas.map((t) => ({ t, hecho: false }));
-    else for (const t of ia.tareas) if (!borrador.tareas.some((x) => x.t.toLowerCase() === t.toLowerCase())) borrador.tareas.push({ t, hecho: false });
-    pintarTareasEdit();
-  }
-}
+function cancelarEdicion() { modo = "vista"; borrador = null; mostrarModo(); pintarVista(); }
 function pintarTareasEdit() {
   $("tareasEdit").replaceChildren(...borrador.tareas.map((t, i) => {
     const id = "et-" + i;
@@ -752,24 +615,15 @@ async function guardar() {
   if (!borrador.nombre && !borrador.marca && !borrador.modelo) { $("errGuardar").textContent = "Ponle al menos un nombre o la marca."; return; }
   guardando = true; $("guardar").disabled = true; $("errGuardar").textContent = "";
   try {
-    const nuevas = fotos.filter((f) => f.blob);
-    if (nuevas.length && !assets) throw { message: "no tienes permiso para subir fotos" };
-    let i = 0;
-    for (const f of nuevas) { $("errGuardar").textContent = `Subiendo fotos ${++i}/${nuevas.length}…`; const up = await assets.upload(f.blob); f.id = up.id; delete f.blob; }
-    $("errGuardar").textContent = "";
-    borrador.fotos = fotos.map((f) => f.id).filter(Boolean);
     borrador.actualizado = new Date().toISOString();
-    if (!borrador.creado) borrador.creado = borrador.actualizado;
-    const ref = actual ? db.doc("relojes/" + actual) : db.collection("relojes").doc();
-    await ref.set(borrador);
+    await db.doc("relojes/" + actual).set(borrador);
     toast("Guardado");
-    actual = ref.id; borrador = null; modo = "vista"; fotoSel = 0; mostrarModo(); pintarVista();
+    borrador = null; modo = "vista"; mostrarModo(); pintarVista();
   } catch (e) {
     $("errGuardar").textContent = "No se pudo guardar: " + (e?.message || e?.code || "error");
   } finally { guardando = false; $("guardar").disabled = false; }
 }
 
-$("analizar").addEventListener("click", () => { borrador.ia = null; analizar(); });
 $("addTarea").addEventListener("click", addTarea);
 $("nuevaTarea").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTarea(); } });
 $("form").addEventListener("submit", (e) => e.preventDefault());
@@ -779,8 +633,6 @@ $("editar").addEventListener("click", () => editar(relojes.find((x) => x.id === 
 $("cerrar").addEventListener("click", cerrar);
 $("scrim").addEventListener("click", cerrar);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("panel").hidden) cerrar(); });
-$("nuevoFotos").addEventListener("click", nuevoDesdeFotos);
-$("nuevoFotos2").addEventListener("click", nuevoDesdeFotos);
 $("orden").addEventListener("change", (e) => { orden = e.target.value; render(); });
 $("toggleValor").addEventListener("click", () => {
   verValor = !verValor; $("toggleValor").setAttribute("aria-pressed", String(verValor));
@@ -791,9 +643,7 @@ $("toggleValor").addEventListener("click", () => {
 render();
 (async () => {
   db = await window.claude?.use?.("db");
-  if (!db) { $("estadoCarga").textContent = "Abre la página con tu cuenta para ver la colección."; $("nuevoFotos").disabled = true; return; }
-  claude.use("assets").then((a) => { assets = a; if (borrador) pintarFotos(); });
-  claude.use("sample").then(async (s) => { if (!s) return; const lim = await s.limits().catch(() => null); sample = s; maxImgs = lim?.images?.maxCount || 0; if (borrador) pintarFotos(); });
+  if (!db) { $("estadoCarga").textContent = "No se puede cargar la colección."; return; }
   const timer = setTimeout(() => { $("estadoCarga").textContent = cargado ? "Puede que no esté al día: no se llega a la base de datos." : "No se llega a la base de datos todavía; sigue intentándolo."; }, 10000);
   db.collection("relojes").onSnapshot((snap) => {
     relojes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
