@@ -2,24 +2,22 @@
 
 Guarda cada reloj como un documento JSON en SQLite (`datos/pelucos.db`) y las fotos como ficheros
 (`datos/fotos/<id>`). La página (`static/index.html`) es la misma que se hizo en claude.ai; `static/servidor.js`
-le da, con esta API, las mismas funciones que allí le daba la plataforma (`db` y `assets`).
+le da, con esta API, la función `db` que allí le daba la plataforma. No se dan de alta relojes nuevos desde la web.
 """
 import json
 import os
 import re
-import secrets
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 
 RAIZ = Path(__file__).resolve().parent.parent
 ESTATICOS = RAIZ / "static"
 DATOS = Path(os.environ.get("PELUCOS_DATOS", RAIZ / "datos"))
-MAX_FOTO = 20 * 1024 * 1024
 MAX_DOC = 256 * 1024
 ID_RELOJ = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 ID_FOTO = re.compile(r"^[0-9a-f]{32}$")
@@ -37,9 +35,7 @@ def _bd() -> sqlite3.Connection:
 
 
 def _fotos() -> Path:
-    d = DATOS / "fotos"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return DATOS / "fotos"
 
 
 def _id_valido(id: str) -> str:
@@ -129,20 +125,6 @@ def borrar(id: str):
         c.execute("DELETE FROM relojes WHERE id = ?", (_id_valido(id),))
         c.commit()
     return Response(status_code=204)
-
-
-@app.post("/api/fotos")
-async def subir_foto(foto: UploadFile):
-    contenido = await foto.read(MAX_FOTO + 1)
-    if len(contenido) > MAX_FOTO:
-        raise HTTPException(413, "La foto pasa de 20 MB")
-    if not any(contenido.startswith(m) for m in TIPOS):
-        raise HTTPException(415, "Solo fotos JPEG, PNG, WebP o GIF")
-    id = secrets.token_hex(16)
-    destino = _fotos() / id
-    destino.with_suffix(".tmp").write_bytes(contenido)
-    destino.with_suffix(".tmp").replace(destino)
-    return {"id": id, "url": f"/_blob/{id}", "sizeBytes": len(contenido)}
 
 
 @app.get("/_blob/{id}")

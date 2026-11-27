@@ -1,7 +1,5 @@
 // Puente entre la página (hecha para claude.ai) y la API de este servidor.
-// La página pide sus funciones con `claude.use(nombre)`; aquí se dan `db` (las fichas, en /api/relojes) y `assets`
-// (las fotos, en /api/fotos). El resto (`sample`, el análisis con Claude) no existe en el servidor: devuelve null y la
-// página oculta ese botón.
+// La página pide sus funciones con `claude.use(nombre)`; aquí solo existe `db`: las fichas, en /api/relojes.
 (() => {
   const oyentes = new Set();
   let ultimo = null;
@@ -9,8 +7,8 @@
   async function pedir(metodo, url, cuerpo) {
     const r = await fetch(url, {
       method: metodo,
-      headers: cuerpo && !(cuerpo instanceof FormData) ? { "Content-Type": "application/json" } : undefined,
-      body: cuerpo instanceof FormData ? cuerpo : cuerpo ? JSON.stringify(cuerpo) : undefined,
+      headers: cuerpo ? { "Content-Type": "application/json" } : undefined,
+      body: cuerpo ? JSON.stringify(cuerpo) : undefined,
     });
     if (!r.ok) {
       let msg = r.statusText;
@@ -33,7 +31,6 @@
   setInterval(() => { if (oyentes.size && document.visibilityState === "visible") refrescar(); }, 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && oyentes.size) refrescar(); });
 
-  const nuevoId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => b.toString(16).padStart(2, "0")).join("");
   const url = (id) => "/api/relojes/" + encodeURIComponent(id);
   const tras = (p) => p.then((x) => { refrescar(); return x; });
 
@@ -51,7 +48,6 @@
     collection: (ruta) => {
       if (ruta !== "relojes") throw new TypeError("Solo existe la colección «relojes»");
       return {
-        doc: (id) => documento(id || nuevoId()),
         onSnapshot(next, error) {
           const o = { next, error };
           oyentes.add(o);
@@ -67,13 +63,5 @@
     },
   };
 
-  const assets = {
-    async upload(blob) {
-      const fd = new FormData();
-      fd.append("foto", blob, "foto");
-      return pedir("POST", "/api/fotos", fd);
-    },
-  };
-
-  window.claude = { use: async (nombre) => ({ db, assets }[nombre] ?? null) };
+  window.claude = { use: async (nombre) => (nombre === "db" ? db : null) };
 })();
